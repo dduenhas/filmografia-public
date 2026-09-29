@@ -3,6 +3,7 @@
 // - Pessoais: dono é o único com acesso; MEMBER começa apenas com os próprios.
 // O catálogo em uso fica num cookie (CATALOG_COOKIE), validado a cada request.
 import { cookies } from "next/headers";
+import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@/lib/auth";
 
@@ -157,4 +158,37 @@ export async function resolveCurrentCatalogFromRequest(req: Request, user: Activ
 export function catalogCookieHeader(catalogId: string): string {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   return `${CATALOG_COOKIE}=${catalogId}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=${CATALOG_COOKIE_MAX_AGE}`;
+}
+
+// ---------- Compartilhamento público (somente leitura) ----------
+
+/** Gera um token opaco e imprevisível para o link público do catálogo. */
+function newShareToken(): string {
+  return randomBytes(12).toString("base64url");
+}
+
+/** Catálogo público a partir do token do link compartilhado; null se inválido/desativado. */
+export async function getPublicCatalogByToken(token: string): Promise<{ id: string; name: string } | null> {
+  if (!token) return null;
+  return prisma.catalog.findUnique({ where: { shareToken: token }, select: { id: true, name: true } });
+}
+
+/** Token atual do catálogo (null se o compartilhamento estiver desativado). */
+export async function getShareToken(catalogId: string): Promise<string | null> {
+  const row = await prisma.catalog.findUnique({ where: { id: catalogId }, select: { shareToken: true } });
+  return row?.shareToken ?? null;
+}
+
+/** Cria (ou retorna, se já existir) o token de compartilhamento do catálogo. */
+export async function ensureShareToken(catalogId: string): Promise<string> {
+  const existing = await getShareToken(catalogId);
+  if (existing) return existing;
+  const token = newShareToken();
+  await prisma.catalog.update({ where: { id: catalogId }, data: { shareToken: token } });
+  return token;
+}
+
+/** Desativa o link público do catálogo. */
+export async function revokeShareToken(catalogId: string): Promise<void> {
+  await prisma.catalog.update({ where: { id: catalogId }, data: { shareToken: null } });
 }

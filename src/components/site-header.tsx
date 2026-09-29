@@ -17,9 +17,14 @@ export async function SiteHeader() {
           </span>
         </Link>
 
-        <div className="min-w-0 flex-1">
-          <SearchBox />
-        </div>
+        {/* A busca em APIs externas (TMDB) é exclusiva de usuários autenticados. */}
+        {session ? (
+          <div className="min-w-0 flex-1">
+            <SearchBox />
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1" aria-hidden="true" />
+        )}
 
         {session?.role === "ADMIN" && (
           <Link

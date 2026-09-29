@@ -9,6 +9,7 @@ import { MultiSelect } from "@/components/multi-select";
 
 interface Props {
   facets: Facets;
+  basePath?: string;
 }
 
 const FILTER_KEYS = ["genres", "countries", "yearFrom", "yearTo", "cast", "director", "company", "mediaType", "location", "shelf"] as const;
@@ -18,7 +19,7 @@ function splitCsv(v: string | null): string[] {
 }
 
 /** Painel de filtros avançados do catálogo. Gênero/país em chips; ano, ator, diretor e produtora por campo. */
-export function FiltersPanel({ facets }: Props) {
+export function FiltersPanel({ facets, basePath = "/" }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -81,7 +82,7 @@ export function FiltersPanel({ facets }: Props) {
     if (mediaType) params.set("mediaType", mediaType);
     if (location.trim()) params.set("location", location.trim());
     if (shelf.trim()) params.set("shelf", shelf.trim());
-    router.push(params.size > 0 ? `/?${params.toString()}` : "/");
+    router.push(params.size > 0 ? `${basePath}?${params.toString()}` : basePath);
   }
 
   function clear() {
@@ -98,7 +99,7 @@ export function FiltersPanel({ facets }: Props) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("page");
     FILTER_KEYS.forEach((k) => params.delete(k));
-    router.push(params.size > 0 ? `/?${params.toString()}` : "/");
+    router.push(params.size > 0 ? `${basePath}?${params.toString()}` : basePath);
   }
 
   const chip = (active: boolean) =>

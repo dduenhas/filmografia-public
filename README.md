@@ -10,6 +10,7 @@ Sistema web completo para catalogação de filmes, com **login e papéis de aces
 
 - 🔐 **Login com papéis**: `ADMIN` (gerencia colaboradores + catálogos), `COLLABORATOR` (cataloga em catálogos compartilhados) e `MEMBER`. O primeiro acesso cria o administrador via *bootstrap*. Sessão em JWT (cookie httpOnly) e senha com bcrypt.
 - 📁 **Múltiplos catálogos**: cada usuário pode criar vários catálogos e compartilhá-los com a equipe (regras de isolamento por papel).
+- 🔗 **Link público somente leitura**: o botão *Compartilhar* (ao lado do título do catálogo) gera um token que expõe `/c/[token]` — qualquer pessoa, **sem login**, pode pesquisar, filtrar e abrir a página do filme em modo somente leitura, sem edição e sem acesso à busca em APIs externas.
 - ✍️ **Cadastro manual**: filmes não encontrados nas fontes online podem ser cadastrados/editados à mão (metadados, imagens, links e localização). Sem capa/fundo, o sistema exibe **imagens padrão (placeholder)**.
 - 👥 **Dashboard** (admin): estatísticas do catálogo, notas médias, gêneros mais presentes, adicionados recentemente e **gestão de colaboradores** (criar, promover/rebaixar, ativar/desativar, redefinir senha, excluir).
 - 🔎 **Busca global** com autocomplete (debounce, navegação por teclado, resultados com capa e nota).
@@ -17,6 +18,7 @@ Sistema web completo para catalogação de filmes, com **login e papéis de aces
 - 🗂️ **Filtros avançados**: gênero, país, faixa de ano, ator/atriz, diretor(a), produtora, **tipo de mídia**, **local** e **estante** (com autocompletar a partir dos valores reais do catálogo e busca parcial).
 - 📍 **Localização física da cópia**: local, estante, prateleira e numeração (tudo opcional).
 - 💿 **Tipo de mídia**: DVD, VHS, VCD, CD, DVD-R, 8MM, BetaMax ou **Digital** — neste último, habilita o campo de **URL da cópia**.
+- ▶️ **Pílula "Assista online"**: quando a mídia da cópia é **Digital** e há **URL** informada, a página do filme exibe um destaque que abre o link em nova aba.
 - 🔃 **Ordenações**: recentes, título, nota TMDB, minha nota, lançamento (novos/antigos) e duração.
 - 📊 **Relatórios em CSV e PDF**: exporta o resultado dos filtros atuais ou o catálogo completo. O **CSV** é compatível com Excel/Google Sheets (BOM UTF-8, separador `;`) e inclui metadados, avaliações, links IMDb/TMDB e as colunas de **localização física** e **mídia**. O **PDF** (A4 paisagem) traz uma coluna de **mídia** (tipo + URL quando aplicável).
 - 🎞️ **Página do filme**: hero com backdrop, capa, trailer em modal (YouTube sem cookies), demais vídeos, sinopse, elenco, ficha técnica.
@@ -125,6 +127,7 @@ src/
     page.tsx              # home: catálogo com abas, filtros, ordenação, relatório e paginação
     movie/[tmdbId]/       # detalhes do filme (TMDB + registro local)
     filme/[id]/           # detalhes do filme cadastrado manualmente
+    c/[token]/            # visualização pública somente leitura do catálogo (link compartilhado) + página do filme
     filme/novo/           # formulário de cadastro manual
     login/                # login + bootstrap do primeiro admin
     dashboard/            # estatísticas + gestão de colaboradores (admin)
@@ -132,12 +135,12 @@ src/
     api/movies/           # POST importa filme · PATCH/DELETE dados pessoais (favorito, nota, localização, mídia…)
     api/movies/manual/    # POST/PATCH cadastro manual de filme
     api/reports/          # GET exporta CSV ou PDF (com os filtros ativos ou completo)
-    api/catalogs/         # gestão de catálogos (criar/renomear/selecionar/compartilhar)
+    api/catalogs/         # gestão de catálogos (criar/renomear/selecionar/compartilhar · token do link público em [id]/share)
     api/users/            # gestão de colaboradores (somente ADMIN)
     api/auth/             # login · logout · bootstrap
   components/             # search box, cards, tabs, filtros, relatório, ações, formulário manual, etc.
   lib/                    # prisma, tmdb, auth (JWT+bcrypt), catalog, report, report-pdf, media, rate-limit, validation
-  proxy.ts                # middleware: exige sessão JWT em todas as rotas (exceto /login e /api/auth)
+  proxy.ts                # middleware: exige sessão JWT em todas as rotas (exceto /login, /api/auth e /c/)
 docs/                     # documentação de ajuda (SETUP, TROUBLESHOOTING)
 scripts/                  # utilitários de verificação (PowerShell) para testar a API localmente
 ```

@@ -21,10 +21,10 @@ export interface MovieCardData {
   watched?: boolean;
 }
 
-export function MovieCard({ movie }: { movie: MovieCardData }) {
+export function MovieCard({ movie, href: hrefOverride, readOnly }: { movie: MovieCardData; href?: string; readOnly?: boolean }) {
   const posterUrl = resolveImageUrl(movie.posterPath, "w342");
   const year = releaseYear(movie.releaseDate);
-  const href = movieHref(movie);
+  const href = hrefOverride ?? movieHref(movie);
   const isManual = movie.source === "MANUAL" || (movie.tmdbId == null && Boolean(movie.id));
 
   return (
@@ -92,7 +92,14 @@ export function MovieCard({ movie }: { movie: MovieCardData }) {
           <span className="ml-1.5 font-normal text-zinc-500">{year !== "—" ? `(${year})` : ""}</span>
         </Link>
         <div className="mt-auto">
-          {movie.tmdbId != null ? (
+          {readOnly ? (
+            <Link
+              href={href}
+              className="flex w-full items-center justify-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent"
+            >
+              Ver detalhes
+            </Link>
+          ) : movie.tmdbId != null ? (
             <AddToCatalogButton tmdbId={movie.tmdbId} inCatalog={movie.inCatalog} className="w-full justify-center" />
           ) : (
             <Link

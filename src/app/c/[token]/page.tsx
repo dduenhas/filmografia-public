@@ -1,39 +1,35 @@
-import { Suspense } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { SearchX, TriangleAlert, Sparkles, PenLine } from "lucide-react";
+import { notFound } from "next/navigation";
+import { Eye, SearchX, TriangleAlert } from "lucide-react";
 import { getCatalog, getFacets, getTabCounts, type CatalogQuery, type CatalogSort, type CatalogTab, type Facets } from "@/lib/catalog";
 import { catalogQuerySchema } from "@/lib/validation";
-import { getTrending } from "@/lib/tmdb";
-import { getActiveUser, getSession } from "@/lib/auth";
-import { listAccessibleCatalogs, resolveCurrentCatalog, SHARED_CATALOG_ID } from "@/lib/catalogs";
-import { prisma } from "@/lib/prisma";
-import { MovieCard, type MovieCardData } from "@/components/movie-card";
+import { getPublicCatalogByToken } from "@/lib/catalogs";
+import { MovieCard } from "@/components/movie-card";
 import { CatalogTabs } from "@/components/catalog-tabs";
 import { SortSelect } from "@/components/sort-select";
 import { Pagination } from "@/components/pagination";
 import { FiltersPanel } from "@/components/filters-panel";
-import { ReportButton } from "@/components/report-button";
-import { CatalogSwitcher, type CatalogOption } from "@/components/catalog-switcher";
-import { ShareCatalogButton } from "@/components/share-catalog-button";
 
-// Sempre dinâmico: lê o PostgreSQL a cada request (catálogo pessoal atualizado em tempo real)
+// Sempre dinâmico: lê o PostgreSQL a cada request (catálogo público atualizado em tempo real)
 export const dynamic = "force-dynamic";
 
 const GRID_CLASS = "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
-
 const EMPTY_FACETS: Facets = { genres: [], countries: [], cast: [], directors: [], companies: [], years: [], locations: [], shelves: [] };
 
-export default async function HomePage({
-  searchParams,
-}: {
+interface Props {
+  params: Promise<{ token: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const user = await getActiveUser(await getSession());
-  if (!user) redirect("/login");
+}
+
+/** Visualização pública somente-leitura de um catálogo (link compartilhado). */
+export default async function PublicCatalogPage({ params, searchParams }: Props) {
+  const { token } = await params;
+  const catalog = await getPublicCatalogByToken(token).catch(() => null);
+  if (!catalog) notFound();
+
+  const basePath = `/c/${token}`;
 
   const raw = await searchParams;
-  // normaliza: pega apenas o primeiro valor de cada parâmetro
   const flat: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (typeof v === "string") flat[k] = v;
@@ -59,9 +55,6 @@ export default async function HomePage({
         sort: "recent" as CatalogSort,
         page: 1,
       };
-
-  let catalog: { id: string; name: string } = { id: SHARED_CATALOG_ID, name: "Catálogo principal" };
-  let catalogs: CatalogOption[] = [{ id: SHARED_CATALOG_ID, name: "Catálogo principal", isShared: true, ownerId: null, movieCount: 0 }];
 
   const query: CatalogQuery = {
     catalogId: catalog.id,
@@ -98,48 +91,14 @@ export default async function HomePage({
   let dbError = false;
 
   try {
-    const active = await resolveCurrentCatalog(user);
-    catalog = active;
-    query.catalogId = active.id;
-
-    const [catalogResult, tabCounts, f, accessible] = await Promise.all([
-      getCatalog(query, p.sort, p.page),
-      getTabCounts(query),
-      getFacets(active.id),
-      listAccessibleCatalogs(user),
-    ]);
-    const groups = await prisma.movie.groupBy({
-      by: ["catalogId"],
-      where: { catalogId: { in: accessible.map((c) => c.id) } },
-      _count: { _all: true },
-    });
-    const countMap = new Map(groups.map((g) => [g.catalogId, g._count._all]));
-
+    const [catalogResult, tabCounts, f] = await Promise.all([getCatalog(query, p.sort, p.page), getTabCounts(query), getFacets(catalog.id)]);
     movies = catalogResult.movies;
     totalPages = catalogResult.totalPages;
     counts = tabCounts;
     facets = f;
-    catalogs = accessible.map((c) => ({ ...c, movieCount: countMap.get(c.id) ?? 0 }));
   } catch (err) {
-    console.error("Erro ao ler catálogo:", err);
+    console.error("Erro ao ler catálogo público:", err);
     dbError = true;
-  }
-
-  // catálogo vazio e sem filtros → sugere tendências da semana para começar
-  let trending: MovieCardData[] = [];
-  if (!dbError && movies.length === 0 && !hasFilters && p.tab === "all" && !p.q) {
-    try {
-      const t = await getTrending();
-      trending = t.results.slice(0, 12).map((m) => ({
-        tmdbId: m.id,
-        title: m.title,
-        posterPath: m.poster_path,
-        releaseDate: m.release_date,
-        voteAverage: m.vote_average,
-      }));
-    } catch {
-      // TMDB indisponível: apenas não exibe sugestões
-    }
   }
 
   const buildHref = (page: number) => {
@@ -158,7 +117,7 @@ export default async function HomePage({
     if (p.shelf) sp.set("shelf", p.shelf);
     if (p.sort !== "recent") sp.set("sort", p.sort);
     if (page > 1) sp.set("page", String(page));
-    return sp.size > 0 ? `/?${sp.toString()}` : "/";
+    return sp.size > 0 ? `${basePath}?${sp.toString()}` : basePath;
   };
 
   const tabTitle =
@@ -166,43 +125,25 @@ export default async function HomePage({
 
   return (
     <div className="space-y-6">
-      <section aria-labelledby="titulo-catalogo" className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 id="titulo-catalogo" className="text-2xl font-bold tracking-tight sm:text-3xl">
-                {tabTitle}
-              </h1>
-              <ShareCatalogButton catalogId={catalog.id} />
-            </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              {catalogs.find((c) => c.id === catalog.id)?.movieCount ?? 0} filmes neste catálogo
-            </p>
-          </div>
+      <section aria-labelledby="titulo-catalogo-publico" className="space-y-4">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <CatalogSwitcher catalogs={catalogs} activeId={catalog.id} currentUserId={user.id} />
-            <Suspense fallback={null}>
-              <ReportButton />
-            </Suspense>
-            <Suspense fallback={null}>
-              <SortSelect />
-            </Suspense>
-            <Link
-              href="/filme/novo"
-              className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent hover:text-black"
-            >
-              <PenLine className="h-4 w-4" aria-hidden="true" />
-              Cadastrar manualmente
-            </Link>
+            <h1 id="titulo-catalogo-publico" className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {tabTitle}
+            </h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Visualização pública · somente leitura
+            </span>
           </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            {counts.all ?? 0} filmes neste catálogo · você pode pesquisar e filtrar, mas não editar.
+          </p>
         </div>
 
-        <Suspense fallback={null}>
-          <CatalogTabs counts={counts} />
-        </Suspense>
+        <CatalogTabs counts={counts} basePath={basePath} />
 
-        {/* filtro por título dentro do catálogo */}
-        <form action="/" method="get" role="search" className="flex gap-2">
+        {/* filtro por título dentro do catálogo (banco local, sem APIs externas) */}
+        <form action={basePath} method="get" role="search" className="flex gap-2">
           {p.tab !== "all" && <input type="hidden" name="tab" value={p.tab} />}
           {p.sort !== "recent" && <input type="hidden" name="sort" value={p.sort} />}
           {p.genres.length > 0 && <input type="hidden" name="genres" value={p.genres.join(",")} />}
@@ -226,48 +167,31 @@ export default async function HomePage({
           />
         </form>
 
-        <Suspense fallback={null}>
-          <FiltersPanel facets={facets} />
-        </Suspense>
+        <FiltersPanel facets={facets} basePath={basePath} />
+
+        <div className="flex justify-end">
+          <SortSelect basePath={basePath} />
+        </div>
       </section>
 
       {dbError && (
         <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
           <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="font-semibold">Não foi possível conectar ao banco de dados.</p>
-            <p className="mt-1 text-amber-400/80">
-              Verifique se <code className="rounded bg-black/30 px-1">DATABASE_URL</code> está configurada corretamente
-              (Vercel → Environment Variables) e se o PostgreSQL do Neon está ativo. A busca no TMDB continua funcionando.
-            </p>
-          </div>
+          <p>Não foi possível conectar ao banco de dados agora. Tente novamente em instantes.</p>
         </div>
       )}
 
-      {!dbError && movies.length === 0 && trending.length === 0 && (
+      {!dbError && movies.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
           <SearchX className="h-10 w-10 text-zinc-600" aria-hidden="true" />
           <p className="text-zinc-400">
-            {hasFilters || p.q
-              ? "Nenhum filme do catálogo corresponde aos filtros atuais."
-              : p.tab === "all"
-                ? "Este catálogo está vazio."
-                : "Nada por aqui ainda."}
+            {hasFilters || p.q ? "Nenhum filme corresponde aos filtros atuais." : "Este catálogo está vazio."}
           </p>
-          <p className="max-w-md text-sm text-zinc-500">
-            {hasFilters
-              ? "Tente remover alguns filtros ou usar a busca no topo para encontrar filmes no TMDB."
-              : "Use a busca no topo para encontrar filmes no TMDB, ou cadastre manualmente um filme que não esteja nos catálogos oficiais."}
-          </p>
-          {!hasFilters && !p.q && (
-            <Link
-              href="/filme/novo"
-              className="mt-1 inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent hover:text-black"
-            >
-              <PenLine className="h-4 w-4" aria-hidden="true" />
-              Cadastrar filme manualmente
+          {hasFilters || p.q ? (
+            <Link href={basePath} className="text-sm text-accent hover:underline">
+              Limpar filtros
             </Link>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -277,6 +201,8 @@ export default async function HomePage({
             {movies.map((m) => (
               <li key={m.id}>
                 <MovieCard
+                  readOnly
+                  href={`${basePath}/filme/${m.id}`}
                   movie={{
                     id: m.id,
                     tmdbId: m.tmdbId,
@@ -296,22 +222,6 @@ export default async function HomePage({
           </ul>
           <Pagination page={p.page} totalPages={totalPages} buildHref={buildHref} />
         </>
-      )}
-
-      {trending.length > 0 && (
-        <section aria-labelledby="titulo-tendencias" className="space-y-4">
-          <h2 id="titulo-tendencias" className="flex items-center gap-2 text-lg font-semibold">
-            <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
-            Em alta esta semana — comece seu catálogo
-          </h2>
-          <ul className={GRID_CLASS} aria-label="Filmes em alta no TMDB">
-            {trending.map((m) => (
-              <li key={m.tmdbId ?? m.title}>
-                <MovieCard movie={m} />
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
     </div>
   );

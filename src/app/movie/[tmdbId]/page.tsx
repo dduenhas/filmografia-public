@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveUser, getSession } from "@/lib/auth";
 import { resolveCurrentCatalog } from "@/lib/catalogs";
 import { formatDateBR, formatRating, formatRuntime, releaseYear } from "@/lib/format";
+import { mediaUsesUrl } from "@/lib/media";
 import { MovieActions } from "@/components/movie-actions";
 import { PlaceholderImage } from "@/components/placeholder-image";
 import { TrailerModal } from "@/components/trailer-modal";
@@ -86,6 +87,7 @@ export default async function MoviePage({ params }: Props) {
   const year = releaseYear(movie.releaseDate);
   const wp = movie.watchProviders;
   const hasProviders = wp.flatrate.length > 0 || wp.rent.length > 0 || wp.buy.length > 0;
+  const watchUrl = local && mediaUsesUrl(local.mediaType) ? local.mediaUrl : null;
 
   const providerSection = (label: string, list: { name: string; logoPath: string | null }[]) =>
     list.length > 0 && (
@@ -191,6 +193,16 @@ export default async function MoviePage({ params }: Props) {
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <TrailerModal videos={movie.videos} title={movie.title} />
               <div className="flex flex-wrap gap-2 text-xs">
+                {watchUrl && (
+                  <a
+                    href={watchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-accent-soft px-3 py-1.5 font-semibold uppercase tracking-wide text-accent transition hover:bg-accent hover:text-black"
+                  >
+                    Assista online <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+                )}
                 {movie.imdbId && (
                   <a
                     href={`https://www.imdb.com/title/${movie.imdbId}/`}

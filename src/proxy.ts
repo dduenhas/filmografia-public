@@ -8,7 +8,7 @@ import { jwtVerify } from "jose";
 // (que carrega o Prisma Client) no bundle do proxy.
 
 const SESSION_COOKIE = "filmografia_session";
-const PUBLIC_PREFIXES = ["/login", "/api/auth"];
+const PUBLIC_PREFIXES = ["/login", "/api/auth", "/c/"];
 
 async function isTokenValid(token: string | undefined): Promise<boolean> {
   const secret = process.env.AUTH_SECRET;

@@ -11,7 +11,7 @@ const TABS = [
   { key: "watched", label: "Assistidos", icon: CheckCircle2 },
 ] as const;
 
-export function CatalogTabs({ counts }: { counts: Record<string, number> }) {
+export function CatalogTabs({ counts, basePath = "/" }: { counts: Record<string, number>; basePath?: string }) {
   const searchParams = useSearchParams();
   const current = searchParams.get("tab") ?? "all";
 
@@ -24,7 +24,7 @@ export function CatalogTabs({ counts }: { counts: Record<string, number> }) {
         params.delete("page");
         if (key === "all") params.delete("tab");
         else params.set("tab", key);
-        const href = params.size > 0 ? `/?${params.toString()}` : "/";
+        const href = params.size > 0 ? `${basePath}?${params.toString()}` : basePath;
         return (
           <Link
             key={key}

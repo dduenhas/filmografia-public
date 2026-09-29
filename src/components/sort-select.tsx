@@ -13,7 +13,7 @@ const OPTIONS = [
   { value: "runtime", label: "Duração (maior)" },
 ] as const;
 
-export function SortSelect() {
+export function SortSelect({ basePath = "/" }: { basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const current = searchParams.get("sort") ?? "recent";
@@ -22,7 +22,7 @@ export function SortSelect() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("sort", e.target.value);
     params.delete("page");
-    router.push(`/?${params.toString()}`);
+    router.push(params.size > 0 ? `${basePath}?${params.toString()}` : basePath);
   }
 
   return (
