@@ -1,0 +1,2 @@
+DELETE FROM "Movie";
+DELETE FROM "User";

@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Catalog {
+  id        String   @id @default(cuid())
+  name      String
+  // shared = catálogo principal, colaborativo (ADMIN + COLLABORATOR);
+  // pessoal = dono é o único com acesso (qualquer papel pode ter vários)
+  isShared  Boolean  @default(false)
+  ownerId   String?
+  owner     User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  movies    Movie[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model Movie {
+  id            String    @id @default(cuid())
+  catalogId     String
+  catalog       Catalog   @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  // nulo para cadastros manuais (filmes fora do TMDB)
+  tmdbId        Int?
+  source        String    @default("TMDB") // TMDB | MANUAL
+  imdbId        String?
+  title         String
+  originalTitle String?
+  overview      String?
+  tagline       String?
+  // TMDB: caminho relativo; MANUAL: URL completa da imagem
+  posterPath    String?
+  backdropPath  String?
+  trailerUrl    String?
+  homepage      String?
+  releaseDate   DateTime?
+  runtime       Int?
+  genres        String[]
+  countries     String[]
+  cast          String[]
+  productionCompanies String[]
+  voteAverage   Float?
+  popularity    Float?
+  trailerKey    String?
+  director      String?
+  addedBy       String?
+
+  // Dados pessoais do catálogo
+  favorite       Boolean   @default(false)
+  watchlist      Boolean   @default(false)
+  watched        Boolean   @default(false)
+  personalRating Float?
+  notes          String?
+  watchedAt      DateTime?
+
+  // Localização física da obra (tudo opcional)
+  location       String? // local (ex.: Sala, Escritório)
+  shelf          String? // estante
+  rack           String? // prateleira
+  numbering      String? // numeração/identificação da cópia
+  mediaType      String? // tipo de mídia da cópia (DVD, VHS, ... , Digital)
+  mediaUrl       String? // URL da cópia quando mediaType = Digital
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([catalogId, tmdbId])
+  @@index([catalogId])
+  @@index([title])
+  @@index([favorite])
+  @@index([watchlist])
+  @@index([watched])
+  @@index([createdAt])
+  @@index([director])
+}
+
+enum Role {
+  ADMIN
+  COLLABORATOR
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(COLLABORATOR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  catalogs     Catalog[]
+}
